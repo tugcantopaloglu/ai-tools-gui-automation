@@ -1,0 +1,31 @@
+{
+  "download_dir": "./downloads",
+  "artifacts_dir": "./artifacts",
+  "headless": false,
+  "timeout": 300,
+  "retry_attempts": 3,
+  "delay_between_artifacts": 5,
+  "providers": {
+    "gemini": {
+      "enabled": true,
+      "url": "https://gemini.google.com"
+    },
+    "chatgpt": {
+      "enabled": true,
+      "url": "https://chat.openai.com"
+    },
+    "claude": {
+      "enabled": true,
+      "url": "https://claude.ai"
+    }
+  },
+  "file_handling": {
+    "create_backups": true,
+    "skip_existing": true,
+    "clear_downloads_after": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "automation.log"
+  }
+}

@@ -1,0 +1,15 @@
+# AI Tools GUI Automation Requirements
+
+# Web Automation
+selenium==4.16.0
+webdriver-manager==4.0.1
+
+# File Handling
+pathlib2==2.3.7
+
+# Configuration
+python-dotenv==1.0.0
+
+# Utilities
+tqdm==4.66.1
+colorama==0.4.6
