@@ -191,6 +191,7 @@ error_screenshot.png
 .chrome/
 session/
 cookies/
+chrome_automation_profile/
 
 # Local configuration overrides
 config.local.json

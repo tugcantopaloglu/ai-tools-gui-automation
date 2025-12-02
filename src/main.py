@@ -24,9 +24,13 @@ from claude_provider import ClaudeProvider
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Reduce noise from Selenium and other libraries
+logging.getLogger('selenium').setLevel(logging.WARNING)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 
 class AIAutomationOrchestrator:
@@ -109,11 +113,39 @@ class AIAutomationOrchestrator:
         else:
             raise ValueError(f"Unknown provider: {provider_name}")
 
-        provider.init_driver()
+        # Get Chrome profile settings from config
+        chrome_profile = self.config.get("chrome_profile", {})
+
+        user_data_dir = None
+        profile_directory = "Default"
+
+        if chrome_profile.get("enabled", False):
+            # Check if using existing Chrome profile
+            if chrome_profile.get("use_existing_profile", False):
+                # Use your existing Chrome profile (must close Chrome first)
+                user_data_dir = chrome_profile.get("existing_profile_path")
+                profile_directory = chrome_profile.get("existing_profile_directory", "Default")
+                print("→ Using your existing Chrome profile (close Chrome if it's running)")
+            else:
+                # Use dedicated automation profile (login once, stays logged in)
+                user_data_dir = chrome_profile.get("user_data_dir")
+                profile_directory = chrome_profile.get("profile_directory", "Default")
+
+                # Convert to absolute path if relative
+                if user_data_dir:
+                    user_data_dir = os.path.abspath(user_data_dir)
+                    # Ensure directory exists
+                    os.makedirs(user_data_dir, exist_ok=True)
+
+        # Initialize driver with Chrome profile if configured
+        if user_data_dir:
+            provider.init_driver(user_data_dir=user_data_dir, profile_directory=profile_directory)
+        else:
+            provider.init_driver()
+
         provider.login({})  # Empty credentials for now (manual login)
 
         self.providers[provider_name] = provider
-        logger.info(f"Initialized provider: {provider_name}")
 
         return provider
 
@@ -127,10 +159,10 @@ class AIAutomationOrchestrator:
         Returns:
             True if successful, False otherwise
         """
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Processing: {artifact.name}")
-        logger.info(f"Type: {artifact.artifact_type}, Provider: {artifact.provider}")
-        logger.info(f"{'='*60}\n")
+        print(f"\n{'='*60}")
+        print(f"  {artifact.name}")
+        print(f"  Type: {artifact.artifact_type} | Provider: {artifact.provider}")
+        print(f"{'='*60}\n")
 
         try:
             # Get the appropriate provider
@@ -159,13 +191,12 @@ class AIAutomationOrchestrator:
                 artifact.extension
             )
 
-            logger.info(f"✓ Successfully processed: {artifact.name}")
-            logger.info(f"  Saved to: {final_path}\n")
+            print(f"✓ Saved: {final_path}\n")
 
             return True
 
         except Exception as e:
-            logger.error(f"✗ Failed to process {artifact.name}: {e}\n")
+            print(f"✗ Error: {e}\n")
             return False
 
     def process_artifacts(self, artifacts: List[Artifact], skip_existing: bool = True):
@@ -181,16 +212,16 @@ class AIAutomationOrchestrator:
         failed = 0
         skipped = 0
 
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Starting batch processing of {total} artifacts")
-        logger.info(f"{'='*60}\n")
+        print(f"\n{'='*60}")
+        print(f"  Processing {total} artifacts")
+        print(f"{'='*60}\n")
 
         for i, artifact in enumerate(artifacts, 1):
-            logger.info(f"\n[{i}/{total}] Processing: {artifact.name}")
+            print(f"\n[{i}/{total}] {artifact.name}")
 
             # Check if artifact already exists
             if skip_existing and self.file_manager.artifact_exists(artifact.output_name, artifact.extension):
-                logger.info(f"⊘ Artifact already exists, skipping: {artifact.output_name}.{artifact.extension}")
+                print(f"⊘ Already exists, skipping\n")
                 skipped += 1
                 continue
 
@@ -200,7 +231,7 @@ class AIAutomationOrchestrator:
 
             for attempt in range(1, retry_attempts + 1):
                 if attempt > 1:
-                    logger.info(f"Retry attempt {attempt}/{retry_attempts}")
+                    print(f"  Retry {attempt}/{retry_attempts}")
 
                 success = self.process_artifact(artifact)
 
@@ -209,7 +240,7 @@ class AIAutomationOrchestrator:
                     break
                 else:
                     if attempt < retry_attempts:
-                        logger.info(f"Retrying in 10 seconds...")
+                        print(f"  Retrying in 10 seconds...")
                         time.sleep(10)
 
             if not success:
@@ -218,18 +249,17 @@ class AIAutomationOrchestrator:
             # Delay between artifacts
             if i < total:
                 delay = self.config.get("delay_between_artifacts", 5)
-                logger.info(f"Waiting {delay} seconds before next artifact...")
                 time.sleep(delay)
 
         # Summary
-        logger.info(f"\n{'='*60}")
-        logger.info(f"Batch Processing Complete")
-        logger.info(f"{'='*60}")
-        logger.info(f"Total: {total}")
-        logger.info(f"Successful: {successful}")
-        logger.info(f"Failed: {failed}")
-        logger.info(f"Skipped: {skipped}")
-        logger.info(f"{'='*60}\n")
+        print(f"\n{'='*60}")
+        print(f"  COMPLETE")
+        print(f"{'='*60}")
+        print(f"  ✓ Success: {successful}")
+        print(f"  ✗ Failed: {failed}")
+        print(f"  ⊘ Skipped: {skipped}")
+        print(f"  Total: {total}")
+        print(f"{'='*60}\n")
 
     def cleanup(self):
         """Clean up resources"""

@@ -5,10 +5,18 @@
   "timeout": 300,
   "retry_attempts": 3,
   "delay_between_artifacts": 5,
+  "chrome_profile": {
+    "enabled": true,
+    "use_existing_profile": false,
+    "user_data_dir": ".\\chrome_automation_profile",
+    "profile_directory": "Default",
+    "existing_profile_path": "C:\\Users\\Administrator\\AppData\\Local\\Google\\Chrome\\User Data",
+    "existing_profile_directory": "Default"
+  },
   "providers": {
     "gemini": {
       "enabled": true,
-      "url": "https://gemini.google.com"
+      "url": "https://gemini.google.com/app"
     },
     "chatgpt": {
       "enabled": true,

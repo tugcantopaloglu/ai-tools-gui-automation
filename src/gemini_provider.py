@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class GeminiProvider(BaseAIProvider):
     """Gemini AI provider automation"""
 
-    GEMINI_URL = "https://gemini.google.com"
+    GEMINI_URL = "https://gemini.google.com/app"
 
     def __init__(self, download_dir: str, headless: bool = False):
         super().__init__(download_dir, headless)
@@ -30,28 +30,65 @@ class GeminiProvider(BaseAIProvider):
         Args:
             credentials: Dictionary with Google credentials (email, password)
         """
-        logger.info("Navigating to Gemini...")
+        print("\n→ Opening Gemini...")
         self.driver.get(self.GEMINI_URL)
 
-        # Check if already logged in
-        time.sleep(3)
+        # Wait for page to load
+        time.sleep(5)
 
-        try:
-            # Look for the chat input to see if we're logged in
-            self.wait_for_element(By.CSS_SELECTOR, "textarea, div[contenteditable='true']", timeout=5)
-            logger.info("Already logged in to Gemini")
-            return
-        except:
-            logger.info("Login required - please log in manually")
-            logger.info("Waiting for manual login... (60 seconds)")
-            time.sleep(60)
-
-            # Check again
+        # Check if already logged in by looking for chat interface
+        def is_logged_in():
             try:
-                self.wait_for_element(By.CSS_SELECTOR, "textarea, div[contenteditable='true']", timeout=10)
-                logger.info("Login successful")
+                # Look for "Sign in" button - if it exists, we're NOT logged in
+                sign_in_buttons = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'Sign in') or contains(text(), 'sign in')]")
+                if sign_in_buttons:
+                    return False
+
+                # Look for chat input - if it exists AND is visible, we ARE logged in
+                input_element = self.driver.find_element(By.CSS_SELECTOR, "textarea[placeholder], div[contenteditable='true']")
+                return input_element.is_displayed()
             except:
-                raise Exception("Login failed or timed out")
+                return False
+
+        if is_logged_in():
+            print("✓ Already logged in\n")
+            return
+
+        # Not logged in - wait for manual login
+        print("\n" + "=" * 70)
+        print("  MANUAL LOGIN REQUIRED")
+        print("=" * 70)
+        print("\nPlease log into Gemini in the Chrome window:")
+        print("  1. Click 'Sign in'")
+        print("  2. Enter your Google credentials")
+        print("  3. Complete 2FA if required")
+        print("\nWaiting for login (checking every 5 seconds)...\n")
+
+        # Wait up to 5 minutes, checking every 5 seconds
+        max_wait_time = 300  # 5 minutes
+        check_interval = 5  # 5 seconds
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            time.sleep(check_interval)
+            elapsed_time += check_interval
+
+            # Check if login completed
+            if is_logged_in():
+                print("\n" + "=" * 70)
+                print("  ✓ Login successful!")
+                print("=" * 70 + "\n")
+                return
+
+            # Still waiting
+            remaining = max_wait_time - elapsed_time
+            print(f"⏳ Still waiting... ({remaining}s remaining)", end='\r')
+
+        # Timeout
+        print("\n\n" + "=" * 70)
+        print("  ✗ Login timeout after 5 minutes")
+        print("=" * 70 + "\n")
+        raise Exception("Login failed or timed out after 5 minutes")
 
     def select_mode(self, mode: str):
         """
@@ -115,7 +152,7 @@ class GeminiProvider(BaseAIProvider):
         Args:
             prompt: The prompt text
         """
-        logger.info("Sending prompt to Gemini...")
+        print("→ Sending prompt...")
 
         try:
             # Find the input field (textarea or contenteditable div)
@@ -149,11 +186,11 @@ class GeminiProvider(BaseAIProvider):
 
             # Submit (usually Enter or a send button)
             input_element.send_keys(Keys.RETURN)
-            logger.info("Prompt sent successfully")
+            print("✓ Prompt sent")
             time.sleep(2)
 
         except Exception as e:
-            logger.error(f"Error sending prompt: {e}")
+            print(f"✗ Error sending prompt: {e}")
             raise
 
     def wait_for_completion(self, timeout: int = 300):
@@ -163,7 +200,7 @@ class GeminiProvider(BaseAIProvider):
         Args:
             timeout: Maximum time to wait in seconds
         """
-        logger.info("Waiting for Gemini to complete generation...")
+        print("→ Generating...", end='', flush=True)
 
         start_time = time.time()
 
@@ -210,7 +247,7 @@ class GeminiProvider(BaseAIProvider):
                             try:
                                 images = self.driver.find_elements(By.XPATH, selector)
                                 if images:
-                                    logger.info("Generation completed - image found")
+                                    print(" ✓")
                                     return
                             except:
                                 continue
@@ -226,7 +263,7 @@ class GeminiProvider(BaseAIProvider):
                             try:
                                 elements = self.driver.find_elements(By.XPATH, selector)
                                 if elements and elements[-1].text.strip():
-                                    logger.info("Generation completed - text found")
+                                    print(" ✓")
                                     return
                             except:
                                 continue
@@ -249,7 +286,7 @@ class GeminiProvider(BaseAIProvider):
         Returns:
             Path to the downloaded file
         """
-        logger.info(f"Downloading artifact: {artifact_name}")
+        print("→ Downloading...")
 
         try:
             if self.current_mode == 'image':

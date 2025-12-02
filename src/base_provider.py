@@ -38,9 +38,24 @@ class BaseAIProvider(ABC):
         # Ensure download directory exists
         os.makedirs(self.download_dir, exist_ok=True)
 
-    def init_driver(self):
-        """Initialize Selenium WebDriver with Chrome"""
+    def init_driver(self, user_data_dir: str = None, profile_directory: str = None):
+        """Initialize Selenium WebDriver with Chrome
+
+        Args:
+            user_data_dir: Path to Chrome user data directory (optional, for persistent sessions)
+            profile_directory: Profile folder name (e.g., 'Default', 'Profile 1')
+        """
         chrome_options = Options()
+
+        # Use existing Chrome profile for persistent login
+        if user_data_dir:
+            chrome_options.add_argument(f"--user-data-dir={user_data_dir}")
+            if profile_directory:
+                chrome_options.add_argument(f"--profile-directory={profile_directory}")
+
+            # Additional arguments to prevent conflicts
+            chrome_options.add_argument("--remote-debugging-port=9222")
+            chrome_options.add_argument("--disable-dev-shm-usage")
 
         # Set download directory
         prefs = {
@@ -71,8 +86,6 @@ class BaseAIProvider(ABC):
 
         self.driver = webdriver.Chrome(options=chrome_options)
         self.wait = WebDriverWait(self.driver, 30)
-
-        logger.info(f"Initialized {self.__class__.__name__} driver")
 
     def close(self):
         """Close the browser"""
