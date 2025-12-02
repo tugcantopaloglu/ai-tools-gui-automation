@@ -23,6 +23,7 @@ class GeminiProvider(BaseAIProvider):
         super().__init__(download_dir, headless)
         self.current_mode = None
         self.image_mode_selected = False  # Track if image mode was already selected
+        self.downloaded_image_urls = set()  # Track already downloaded images
 
     def login(self, credentials: dict):
         """
@@ -247,6 +248,9 @@ class GeminiProvider(BaseAIProvider):
         start_time = time.time()
         last_dot_time = time.time()
 
+        # Count how many images we had before generation
+        images_before = len(self.downloaded_image_urls)
+
         while time.time() - start_time < timeout:
             # Print dots every 2 seconds to show it's working
             if time.time() - last_dot_time > 2:
@@ -258,26 +262,25 @@ class GeminiProvider(BaseAIProvider):
                 time.sleep(2)
 
                 # First check: Is there a "Stop generating" or similar button? If yes, still generating
-                stop_buttons = self.driver.find_elements(By.XPATH, "//button[contains(., 'Stop') or contains(@aria-label, 'Stop')]")
+                stop_buttons = self.driver.find_elements(By.XPATH, "//button[contains(., 'Stop') or contains(@aria-label, 'Stop') or contains(., 'Durdur')]")
                 if stop_buttons and any(btn.is_displayed() for btn in stop_buttons):
                     continue  # Still generating
 
-                # Second check: Look for generated images in the response area
+                # Second check: Look for NEW generated images (not in our downloaded set)
                 if self.current_mode == 'image':
-                    # Look for images that are recently added (in message/response containers)
                     all_images = self.driver.find_elements(By.TAG_NAME, "img")
 
                     for img in all_images:
                         try:
-                            # Check if image is visible and has actual content (not icons/logos)
                             if img.is_displayed():
                                 src = img.get_attribute('src')
-                                # Look for data URLs or blob URLs (generated images)
+                                # Look for new images we haven't seen before
                                 if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
-                                    # Found a generated image!
-                                    print(" ✓")
-                                    time.sleep(1)  # Wait a moment to ensure it's fully loaded
-                                    return
+                                    if src not in self.downloaded_image_urls:
+                                        # Found a NEW generated image!
+                                        print(" ✓")
+                                        time.sleep(1)  # Wait a moment to ensure it's fully loaded
+                                        return
                         except:
                             continue
 
@@ -285,7 +288,7 @@ class GeminiProvider(BaseAIProvider):
                 try:
                     input_element = self.driver.find_element(By.CSS_SELECTOR, "textarea[placeholder], div[contenteditable='true']")
                     if input_element.is_enabled() and input_element.is_displayed():
-                        # Input is enabled, check one more time for images
+                        # Input is enabled, check one more time for new images
                         time.sleep(2)
                         all_images = self.driver.find_elements(By.TAG_NAME, "img")
                         for img in all_images:
@@ -293,8 +296,9 @@ class GeminiProvider(BaseAIProvider):
                                 if img.is_displayed():
                                     src = img.get_attribute('src')
                                     if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
-                                        print(" ✓")
-                                        return
+                                        if src not in self.downloaded_image_urls:
+                                            print(" ✓")
+                                            return
                             except:
                                 continue
                 except:
@@ -324,7 +328,7 @@ class GeminiProvider(BaseAIProvider):
                 # Find the generated image
                 time.sleep(2)
 
-                # Find all images and get the generated one (with googleusercontent or data/blob URL)
+                # Find all images and get the NEW generated one (not already downloaded)
                 all_images = self.driver.find_elements(By.TAG_NAME, "img")
                 image_element = None
 
@@ -333,13 +337,17 @@ class GeminiProvider(BaseAIProvider):
                         if img.is_displayed():
                             src = img.get_attribute('src')
                             if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
-                                image_element = img
-                                break
+                                # Check if we haven't downloaded this image yet
+                                if src not in self.downloaded_image_urls:
+                                    image_element = img
+                                    self.downloaded_image_urls.add(src)  # Mark as found
+                                    print(f"✓ Found new image")
+                                    break
                     except:
                         continue
 
                 if not image_element:
-                    raise Exception("Could not find generated image")
+                    raise Exception("Could not find new generated image (all images already processed)")
 
                 # Scroll to the image
                 self.scroll_to_element(image_element)
@@ -439,9 +447,17 @@ class GeminiProvider(BaseAIProvider):
                     time.sleep(1)
 
                 # Wait for download to complete
-                print("→ Waiting for download...")
-                downloaded_file = self.get_latest_download(extension='png', timeout=30)
-                return downloaded_file
+                print("→ Waiting for download (this may take a moment)...")
+                try:
+                    downloaded_file = self.get_latest_download(extension='png', timeout=120)
+                    print(f"✓ Downloaded successfully")
+                    return downloaded_file
+                except TimeoutError:
+                    print("⚠ Download is taking longer than expected, waiting more...")
+                    # Try waiting longer
+                    downloaded_file = self.get_latest_download(extension='png', timeout=180)
+                    print(f"✓ Downloaded successfully")
+                    return downloaded_file
 
             else:
                 # For text/code, copy the content
