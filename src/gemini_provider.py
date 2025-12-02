@@ -22,6 +22,7 @@ class GeminiProvider(BaseAIProvider):
     def __init__(self, download_dir: str, headless: bool = False):
         super().__init__(download_dir, headless)
         self.current_mode = None
+        self.image_mode_selected = False  # Track if image mode was already selected
 
     def login(self, credentials: dict):
         """
@@ -99,9 +100,15 @@ class GeminiProvider(BaseAIProvider):
         Args:
             mode: Mode type ('image', 'text', 'code')
         """
-        print(f"→ Selecting mode: {mode}")
-
         if mode == 'image':
+            # Only select image mode on the first time
+            if self.image_mode_selected:
+                print("✓ Image mode already active (skipping selection)")
+                self.current_mode = 'image'
+                return
+
+            print(f"→ Selecting image generation mode (first time)...")
+
             try:
                 # Wait for the page to be ready
                 time.sleep(2)
@@ -158,6 +165,7 @@ class GeminiProvider(BaseAIProvider):
                         image_gen_button.click()
                         time.sleep(2)
                         self.current_mode = 'image'
+                        self.image_mode_selected = True  # Mark as selected
                         print("✓ Image generation mode activated")
                         return
                     else:
@@ -167,10 +175,12 @@ class GeminiProvider(BaseAIProvider):
 
                 # If we couldn't find the buttons, still set the mode
                 self.current_mode = 'image'
+                self.image_mode_selected = True
 
             except Exception as e:
                 print(f"⚠ Error selecting mode: {e}")
                 self.current_mode = 'image'
+                self.image_mode_selected = True
 
         else:
             # For text/code, usually no mode selection needed
@@ -348,20 +358,34 @@ class GeminiProvider(BaseAIProvider):
                 print("→ Looking for download button...")
                 download_button = None
 
+                # Wait a moment for overlay buttons to appear
+                time.sleep(1)
+
                 download_selectors = [
+                    # Material icon with fonticon="download"
+                    "//mat-icon[@fonticon='download']",
+                    "//button[.//mat-icon[@fonticon='download']]",
+                    # Other possible selectors
                     "//button[contains(@aria-label, 'Download') or contains(@aria-label, 'İndir')]",
                     "//button[contains(@title, 'Download') or contains(@title, 'İndir')]",
-                    "//button[.//*[name()='svg' and contains(@class, 'download')]]",
-                    "//a[contains(@download, '')]",
-                    "//button[@data-tooltip='Download' or @data-tooltip='İndir']"
+                    "//button[.//*[@fonticon='download']]",
+                    "//a[contains(@download, '')]"
                 ]
 
                 for selector in download_selectors:
                     try:
-                        buttons = self.driver.find_elements(By.XPATH, selector)
-                        for btn in buttons:
-                            if btn.is_displayed():
-                                download_button = btn
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        for elem in elements:
+                            if elem.is_displayed():
+                                # If we found the icon, get its parent button
+                                if elem.tag_name == 'mat-icon':
+                                    try:
+                                        download_button = elem.find_element(By.XPATH, "./ancestor::button[1]")
+                                    except:
+                                        download_button = elem  # Use the icon itself if no button parent
+                                else:
+                                    download_button = elem
+
                                 print("✓ Found download button")
                                 break
                         if download_button:
@@ -379,7 +403,7 @@ class GeminiProvider(BaseAIProvider):
 
                     time.sleep(2)
                 else:
-                    print("⚠ Could not find download button, trying alternative method...")
+                    print("⚠ Could not find download button")
 
                 # Step 4: Go back to chat (click back button in top left)
                 print("→ Going back to chat...")
