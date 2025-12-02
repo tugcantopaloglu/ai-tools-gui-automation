@@ -57,6 +57,10 @@ class BaseAIProvider(ABC):
             chrome_options.add_argument("--remote-debugging-port=9222")
             chrome_options.add_argument("--disable-dev-shm-usage")
 
+            # Don't restore previous session - start fresh
+            chrome_options.add_argument("--no-first-run")
+            chrome_options.add_argument("--no-default-browser-check")
+
         # Set download directory
         prefs = {
             "download.default_directory": self.download_dir,
@@ -76,8 +80,13 @@ class BaseAIProvider(ABC):
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
+
+        # Suppress Chrome error messages
+        chrome_options.add_argument("--log-level=3")
+        chrome_options.add_argument("--silent")
+        chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
 
         # User agent to avoid detection
         chrome_options.add_argument(

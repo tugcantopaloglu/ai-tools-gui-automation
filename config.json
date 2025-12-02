@@ -33,7 +33,7 @@
     "clear_downloads_after": true
   },
   "logging": {
-    "level": "INFO",
+    "level": "WARNING",
     "file": "automation.log"
   }
 }

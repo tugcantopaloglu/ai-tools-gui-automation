@@ -23,7 +23,7 @@ from chatgpt_provider import ChatGPTProvider
 from claude_provider import ClaudeProvider
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -31,6 +31,8 @@ logger = logging.getLogger(__name__)
 # Reduce noise from Selenium and other libraries
 logging.getLogger('selenium').setLevel(logging.WARNING)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+logging.getLogger('markdown_parser').setLevel(logging.WARNING)
+logging.getLogger('file_manager').setLevel(logging.WARNING)
 
 
 class AIAutomationOrchestrator:
@@ -125,7 +127,15 @@ class AIAutomationOrchestrator:
                 # Use your existing Chrome profile (must close Chrome first)
                 user_data_dir = chrome_profile.get("existing_profile_path")
                 profile_directory = chrome_profile.get("existing_profile_directory", "Default")
-                print("→ Using your existing Chrome profile (close Chrome if it's running)")
+                print("\n" + "=" * 70)
+                print("  USING YOUR EXISTING CHROME PROFILE")
+                print("=" * 70)
+                print("\n⚠️  WARNING: Chrome must be COMPLETELY CLOSED")
+                print("\nIf Chrome is running, the automation will hang.")
+                print("Please close all Chrome windows now if you haven't already.")
+                print("\nStarting in 5 seconds...")
+                print("=" * 70 + "\n")
+                time.sleep(5)
             else:
                 # Use dedicated automation profile (login once, stays logged in)
                 user_data_dir = chrome_profile.get("user_data_dir")

@@ -30,10 +30,19 @@ class GeminiProvider(BaseAIProvider):
         Args:
             credentials: Dictionary with Google credentials (email, password)
         """
-        print("\n→ Opening Gemini...")
-        self.driver.get(self.GEMINI_URL)
+        print("\n→ Opening Chrome...")
+
+        # Navigate to Gemini
+        print(f"→ Navigating to {self.GEMINI_URL}...")
+        try:
+            self.driver.get(self.GEMINI_URL)
+            print(f"→ Current URL: {self.driver.current_url}")
+        except Exception as e:
+            print(f"✗ Navigation error: {e}")
+            raise
 
         # Wait for page to load
+        print("→ Waiting for page to load...")
         time.sleep(5)
 
         # Check if already logged in by looking for chat interface
@@ -62,33 +71,26 @@ class GeminiProvider(BaseAIProvider):
         print("  1. Click 'Sign in'")
         print("  2. Enter your Google credentials")
         print("  3. Complete 2FA if required")
-        print("\nWaiting for login (checking every 5 seconds)...\n")
-
-        # Wait up to 5 minutes, checking every 5 seconds
-        max_wait_time = 300  # 5 minutes
-        check_interval = 5  # 5 seconds
-        elapsed_time = 0
-
-        while elapsed_time < max_wait_time:
-            time.sleep(check_interval)
-            elapsed_time += check_interval
-
-            # Check if login completed
-            if is_logged_in():
-                print("\n" + "=" * 70)
-                print("  ✓ Login successful!")
-                print("=" * 70 + "\n")
-                return
-
-            # Still waiting
-            remaining = max_wait_time - elapsed_time
-            print(f"⏳ Still waiting... ({remaining}s remaining)", end='\r')
-
-        # Timeout
-        print("\n\n" + "=" * 70)
-        print("  ✗ Login timeout after 5 minutes")
+        print("  4. Wait until you see the Gemini chat interface")
+        print("\n" + "=" * 70)
+        print("Press ENTER when you're logged in and ready to continue...")
         print("=" * 70 + "\n")
-        raise Exception("Login failed or timed out after 5 minutes")
+
+        # Wait for user to press Enter
+        input()
+
+        # Verify login was successful
+        if is_logged_in():
+            print("\n" + "=" * 70)
+            print("  ✓ Login successful!")
+            print("=" * 70 + "\n")
+            return
+        else:
+            print("\n" + "=" * 70)
+            print("  ✗ Login verification failed")
+            print("  Could not detect Gemini chat interface")
+            print("=" * 70 + "\n")
+            raise Exception("Login verification failed - please ensure you're logged into Gemini")
 
     def select_mode(self, mode: str):
         """
@@ -97,53 +99,83 @@ class GeminiProvider(BaseAIProvider):
         Args:
             mode: Mode type ('image', 'text', 'code')
         """
-        logger.info(f"Selecting mode: {mode}")
+        print(f"→ Selecting mode: {mode}")
 
         if mode == 'image':
-            # For Gemini, we need to select "Generate images" mode
-            # This might be done through a dropdown or button
             try:
-                # Look for image generation button/option
-                # The exact selector may vary based on Gemini UI updates
-                # Common patterns:
-                # 1. Dropdown menu with "Generate images"
-                # 2. Mode selector buttons
-
-                # Wait a bit for the page to load
+                # Wait for the page to be ready
                 time.sleep(2)
 
-                # Try to find and click image generation mode
-                # This is a placeholder - you may need to adjust based on actual UI
-                possible_selectors = [
-                    "//button[contains(text(), 'Generate')]",
-                    "//div[contains(text(), 'Generate images')]",
-                    "//button[contains(@aria-label, 'image')]",
-                    "//span[contains(text(), 'Image')]"
+                # Click on "Araçlar" (Tools) button in the chat box
+                print("→ Looking for 'Araçlar' (Tools) button...")
+                tools_selectors = [
+                    "//button[contains(., 'Araçlar')]",
+                    "//*[contains(text(), 'Araçlar')]",
+                    "//button[contains(@aria-label, 'Araçlar')]"
                 ]
 
-                for selector in possible_selectors:
+                tools_button = None
+                for selector in tools_selectors:
                     try:
-                        element = self.driver.find_element(By.XPATH, selector)
-                        self.scroll_to_element(element)
-                        self.safe_click(element)
-                        logger.info("Image generation mode selected")
-                        self.current_mode = 'image'
-                        time.sleep(2)
-                        return
+                        buttons = self.driver.find_elements(By.XPATH, selector)
+                        for btn in buttons:
+                            if btn.is_displayed():
+                                tools_button = btn
+                                break
+                        if tools_button:
+                            break
                     except:
                         continue
 
-                logger.warning("Could not find image generation mode selector - will try to generate anyway")
+                if tools_button:
+                    print("✓ Found 'Araçlar' button")
+                    tools_button.click()
+                    time.sleep(2)
+
+                    # Now click "Görüntü oluşturun" (Create image)
+                    print("→ Looking for 'Görüntü oluşturun' option...")
+                    image_gen_selectors = [
+                        "//button[contains(., 'Görüntü oluşturun')]",
+                        "//*[contains(text(), 'Görüntü oluşturun')]",
+                        "//div[contains(., 'Görüntü oluştur')]"
+                    ]
+
+                    image_gen_button = None
+                    for selector in image_gen_selectors:
+                        try:
+                            buttons = self.driver.find_elements(By.XPATH, selector)
+                            for btn in buttons:
+                                if btn.is_displayed():
+                                    image_gen_button = btn
+                                    break
+                            if image_gen_button:
+                                break
+                        except:
+                            continue
+
+                    if image_gen_button:
+                        print("✓ Found 'Görüntü oluşturun' option")
+                        image_gen_button.click()
+                        time.sleep(2)
+                        self.current_mode = 'image'
+                        print("✓ Image generation mode activated")
+                        return
+                    else:
+                        print("⚠ Could not find 'Görüntü oluşturun' option")
+                else:
+                    print("⚠ Could not find 'Araçlar' button")
+
+                # If we couldn't find the buttons, still set the mode
                 self.current_mode = 'image'
 
             except Exception as e:
-                logger.warning(f"Error selecting mode: {e}")
-                logger.info("Proceeding with default mode")
+                print(f"⚠ Error selecting mode: {e}")
+                self.current_mode = 'image'
 
         else:
             # For text/code, usually no mode selection needed
             self.current_mode = mode
-            logger.info(f"Mode set to: {mode}")
+            print(f"✓ Mode set to: {mode}")
 
     def send_prompt(self, prompt: str):
         """
@@ -203,77 +235,66 @@ class GeminiProvider(BaseAIProvider):
         print("→ Generating...", end='', flush=True)
 
         start_time = time.time()
-
-        # Look for completion indicators
-        # - Stop button disappears
-        # - Generated content appears
-        # - Loading animation stops
+        last_dot_time = time.time()
 
         while time.time() - start_time < timeout:
+            # Print dots every 2 seconds to show it's working
+            if time.time() - last_dot_time > 2:
+                print(".", end='', flush=True)
+                last_dot_time = time.time()
+
             try:
-                # Check for loading/generating indicators
-                loading_selectors = [
-                    "//div[contains(@class, 'loading')]",
-                    "//div[contains(@class, 'generating')]",
-                    "//*[contains(text(), 'Generating')]",
-                    "//button[contains(text(), 'Stop')]"
-                ]
-
-                is_loading = False
-                for selector in loading_selectors:
-                    try:
-                        elements = self.driver.find_elements(By.XPATH, selector)
-                        if elements:
-                            is_loading = True
-                            break
-                    except:
-                        continue
-
-                if not is_loading:
-                    # Wait a bit more to ensure completion
-                    time.sleep(3)
-
-                    # Check for generated content (image or text)
-                    if self.current_mode == 'image':
-                        # Look for generated images
-                        image_selectors = [
-                            "//img[contains(@src, 'data:image')]",
-                            "//img[contains(@src, 'blob:')]",
-                            "//div[contains(@class, 'image')]//img",
-                            "//img[not(contains(@src, 'icon'))]"
-                        ]
-
-                        for selector in image_selectors:
-                            try:
-                                images = self.driver.find_elements(By.XPATH, selector)
-                                if images:
-                                    print(" ✓")
-                                    return
-                            except:
-                                continue
-                    else:
-                        # For text/code, check for response content
-                        response_selectors = [
-                            "//div[contains(@class, 'response')]",
-                            "//div[contains(@class, 'message')]//p",
-                            "//pre/code"
-                        ]
-
-                        for selector in response_selectors:
-                            try:
-                                elements = self.driver.find_elements(By.XPATH, selector)
-                                if elements and elements[-1].text.strip():
-                                    print(" ✓")
-                                    return
-                            except:
-                                continue
-
+                # Wait a bit before checking
                 time.sleep(2)
+
+                # First check: Is there a "Stop generating" or similar button? If yes, still generating
+                stop_buttons = self.driver.find_elements(By.XPATH, "//button[contains(., 'Stop') or contains(@aria-label, 'Stop')]")
+                if stop_buttons and any(btn.is_displayed() for btn in stop_buttons):
+                    continue  # Still generating
+
+                # Second check: Look for generated images in the response area
+                if self.current_mode == 'image':
+                    # Look for images that are recently added (in message/response containers)
+                    all_images = self.driver.find_elements(By.TAG_NAME, "img")
+
+                    for img in all_images:
+                        try:
+                            # Check if image is visible and has actual content (not icons/logos)
+                            if img.is_displayed():
+                                src = img.get_attribute('src')
+                                # Look for data URLs or blob URLs (generated images)
+                                if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
+                                    # Found a generated image!
+                                    print(" ✓")
+                                    time.sleep(1)  # Wait a moment to ensure it's fully loaded
+                                    return
+                        except:
+                            continue
+
+                # Third check: Look for the input becoming enabled again (generation finished)
+                try:
+                    input_element = self.driver.find_element(By.CSS_SELECTOR, "textarea[placeholder], div[contenteditable='true']")
+                    if input_element.is_enabled() and input_element.is_displayed():
+                        # Input is enabled, check one more time for images
+                        time.sleep(2)
+                        all_images = self.driver.find_elements(By.TAG_NAME, "img")
+                        for img in all_images:
+                            try:
+                                if img.is_displayed():
+                                    src = img.get_attribute('src')
+                                    if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
+                                        print(" ✓")
+                                        return
+                            except:
+                                continue
+                except:
+                    pass
 
             except Exception as e:
-                logger.warning(f"Error while waiting: {e}")
-                time.sleep(2)
+                # Ignore errors and keep trying
+                pass
 
+        print(" ✗ Timeout")
         raise TimeoutError(f"Generation did not complete within {timeout} seconds")
 
     def download_artifact(self, artifact_name: str):
@@ -293,21 +314,17 @@ class GeminiProvider(BaseAIProvider):
                 # Find the generated image
                 time.sleep(2)
 
-                # Look for download button or right-click menu
-                download_selectors = [
-                    "//button[contains(@aria-label, 'Download')]",
-                    "//button[contains(@title, 'Download')]",
-                    "//*[contains(@class, 'download')]",
-                    "//img[last()]"  # Last image in the page
-                ]
-
+                # Find all images and get the generated one (with googleusercontent or data/blob URL)
+                all_images = self.driver.find_elements(By.TAG_NAME, "img")
                 image_element = None
-                for selector in download_selectors:
+
+                for img in reversed(all_images):  # Start from last (most recent)
                     try:
-                        elements = self.driver.find_elements(By.XPATH, selector)
-                        if elements:
-                            image_element = elements[-1]  # Get the last one (most recent)
-                            break
+                        if img.is_displayed():
+                            src = img.get_attribute('src')
+                            if src and ('data:image' in src or 'blob:' in src or 'googleusercontent.com' in src):
+                                image_element = img
+                                break
                     except:
                         continue
 
@@ -318,35 +335,88 @@ class GeminiProvider(BaseAIProvider):
                 self.scroll_to_element(image_element)
                 time.sleep(1)
 
-                # Try to click download button if it exists
+                # Step 1: Click on the image to open it
+                print("→ Clicking on image to open...")
                 try:
-                    download_button = image_element.find_element(By.XPATH, ".//following::button[contains(@aria-label, 'Download')]")
-                    self.safe_click(download_button)
-                    logger.info("Clicked download button")
+                    image_element.click()
                 except:
-                    # If no download button, try right-click and save
-                    logger.info("No download button found, trying right-click method")
+                    self.driver.execute_script("arguments[0].click();", image_element)
 
-                    # Get image URL and download via JavaScript
-                    img_src = image_element.get_attribute('src')
+                time.sleep(2)  # Wait for image to open in full view
 
-                    if img_src:
-                        # Download using JavaScript
-                        download_script = f"""
-                        var link = document.createElement('a');
-                        link.href = '{img_src}';
-                        link.download = '{artifact_name}.png';
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        """
-                        self.driver.execute_script(download_script)
-                        logger.info("Triggered download via JavaScript")
+                # Step 2: Look for download button (top right corner)
+                print("→ Looking for download button...")
+                download_button = None
+
+                download_selectors = [
+                    "//button[contains(@aria-label, 'Download') or contains(@aria-label, 'İndir')]",
+                    "//button[contains(@title, 'Download') or contains(@title, 'İndir')]",
+                    "//button[.//*[name()='svg' and contains(@class, 'download')]]",
+                    "//a[contains(@download, '')]",
+                    "//button[@data-tooltip='Download' or @data-tooltip='İndir']"
+                ]
+
+                for selector in download_selectors:
+                    try:
+                        buttons = self.driver.find_elements(By.XPATH, selector)
+                        for btn in buttons:
+                            if btn.is_displayed():
+                                download_button = btn
+                                print("✓ Found download button")
+                                break
+                        if download_button:
+                            break
+                    except:
+                        continue
+
+                if download_button:
+                    # Step 3: Click the download button
+                    print("→ Clicking download button...")
+                    try:
+                        download_button.click()
+                    except:
+                        self.driver.execute_script("arguments[0].click();", download_button)
+
+                    time.sleep(2)
+                else:
+                    print("⚠ Could not find download button, trying alternative method...")
+
+                # Step 4: Go back to chat (click back button in top left)
+                print("→ Going back to chat...")
+                back_button = None
+                back_selectors = [
+                    "//button[contains(@aria-label, 'Back') or contains(@aria-label, 'Geri')]",
+                    "//button[contains(@aria-label, 'Close') or contains(@aria-label, 'Kapat')]",
+                    "//button[.//*[name()='svg' and contains(@d, 'arrow')]]"
+                ]
+
+                for selector in back_selectors:
+                    try:
+                        buttons = self.driver.find_elements(By.XPATH, selector)
+                        for btn in buttons:
+                            if btn.is_displayed():
+                                back_button = btn
+                                break
+                        if back_button:
+                            break
+                    except:
+                        continue
+
+                if back_button:
+                    print("✓ Found back button")
+                    try:
+                        back_button.click()
+                    except:
+                        self.driver.execute_script("arguments[0].click();", back_button)
+                    time.sleep(1)
+                else:
+                    print("⚠ Could not find back button, using browser back")
+                    self.driver.back()
+                    time.sleep(1)
 
                 # Wait for download to complete
-                time.sleep(3)
+                print("→ Waiting for download...")
                 downloaded_file = self.get_latest_download(extension='png', timeout=30)
-                logger.info(f"Downloaded: {downloaded_file}")
                 return downloaded_file
 
             else:
