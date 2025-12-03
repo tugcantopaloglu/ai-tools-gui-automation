@@ -5,7 +5,7 @@
 
 Automate bulk artifact generation (images, text, code) across multiple AI platforms using Selenium-based browser automation.
 
-## 📋 Table of Contents
+## Table of Contents
 
 - [What This Tool Does](#what-this-tool-does)
 - [Features](#features)
@@ -25,7 +25,7 @@ Automate bulk artifact generation (images, text, code) across multiple AI platfo
 
 ---
 
-## 🎯 What This Tool Does
+## What This Tool Does
 
 This automation tool eliminates the tedium of manually generating hundreds of artifacts using AI web interfaces.
 
