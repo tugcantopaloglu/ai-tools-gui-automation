@@ -3,7 +3,7 @@
 > **IMPORTANT DISCLAIMER** > **Use with your own caution. You can be banned because of an automation it's unclear.**
 > This tool automates web-based AI platforms (ChatGPT, Gemini, Claude) which may violate their Terms of Service. Using automation could result in account suspension or permanent bans. The authors are not responsible for any consequences. Use at your own risk.
 
-Automate bulk artifact generation (images, text, code) across multiple AI platforms using Selenium-based browser automation.
+Automate bulk artifact generation (images, text, code) across multiple AI platforms using Selenium-based browser automation. Tested both on nano banana pro 1 and 2.
 
 ## Table of Contents
 
