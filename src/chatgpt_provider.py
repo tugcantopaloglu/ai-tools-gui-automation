@@ -312,19 +312,21 @@ class ChatGPTProvider(BaseAIProvider):
                     img_src = image_element.get_attribute('src')
 
                     if img_src:
-                        download_script = f"""
-                        fetch('{img_src}')
+                        download_script = """
+                        const source = arguments[0];
+                        const filename = arguments[1];
+                        fetch(source)
                             .then(response => response.blob())
-                            .then(blob => {{
+                            .then(blob => {
                                 var link = document.createElement('a');
                                 link.href = URL.createObjectURL(blob);
-                                link.download = '{artifact_name}.png';
+                                link.download = filename;
                                 document.body.appendChild(link);
                                 link.click();
                                 document.body.removeChild(link);
-                            }});
+                            });
                         """
-                        self.driver.execute_script(download_script)
+                        self.driver.execute_script(download_script, img_src, f'{artifact_name}.png')
                         logger.info("Triggered download via JavaScript")
 
                 # Wait for download
@@ -360,9 +362,7 @@ class ChatGPTProvider(BaseAIProvider):
                     raise Exception("Could not extract generated content")
 
                 # Save to file
-                output_path = f"{self.download_dir}/{artifact_name}.txt"
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                output_path = self.save_text_artifact(artifact_name, 'txt', content)
 
                 logger.info(f"Saved content to: {output_path}")
                 return output_path
@@ -371,8 +371,7 @@ class ChatGPTProvider(BaseAIProvider):
             logger.error(f"Error downloading artifact: {e}")
             # Take screenshot for debugging
             try:
-                screenshot_path = f"{self.download_dir}/error_screenshot.png"
-                self.driver.save_screenshot(screenshot_path)
+                screenshot_path = self.save_error_screenshot()
                 logger.info(f"Screenshot saved: {screenshot_path}")
             except:
                 pass

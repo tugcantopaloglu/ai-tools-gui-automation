@@ -279,9 +279,7 @@ class ClaudeProvider(BaseAIProvider):
                         extension = 'txt'
 
             # Save to file
-            output_path = f"{self.download_dir}/{artifact_name}.{extension}"
-            with open(output_path, 'w', encoding='utf-8') as f:
-                f.write(content)
+            output_path = self.save_text_artifact(artifact_name, extension, content)
 
             logger.info(f"Saved content to: {output_path}")
             return output_path
@@ -290,8 +288,7 @@ class ClaudeProvider(BaseAIProvider):
             logger.error(f"Error downloading artifact: {e}")
             # Take screenshot for debugging
             try:
-                screenshot_path = f"{self.download_dir}/error_screenshot.png"
-                self.driver.save_screenshot(screenshot_path)
+                screenshot_path = self.save_error_screenshot()
                 logger.info(f"Screenshot saved: {screenshot_path}")
             except:
                 pass

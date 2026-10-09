@@ -484,9 +484,7 @@ class GeminiProvider(BaseAIProvider):
                     raise Exception("Could not extract generated content")
 
                 # Save to file
-                output_path = f"{self.download_dir}/{artifact_name}.txt"
-                with open(output_path, 'w', encoding='utf-8') as f:
-                    f.write(content)
+                output_path = self.save_text_artifact(artifact_name, 'txt', content)
 
                 logger.info(f"Saved content to: {output_path}")
                 return output_path
@@ -495,8 +493,7 @@ class GeminiProvider(BaseAIProvider):
             logger.error(f"Error downloading artifact: {e}")
             # Take screenshot for debugging
             try:
-                screenshot_path = f"{self.download_dir}/error_screenshot.png"
-                self.driver.save_screenshot(screenshot_path)
+                screenshot_path = self.save_error_screenshot()
                 logger.info(f"Screenshot saved: {screenshot_path}")
             except:
                 pass

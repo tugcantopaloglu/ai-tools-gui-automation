@@ -17,5 +17,5 @@ jobs:
           python-version: '3.11'
       - run: python -m pip install -r requirements.txt bandit pip-audit
       - run: python -m unittest discover -s tests -v
-      - run: python -m bandit src/base_provider.py src/file_manager.py src/main.py src/markdown_parser.py -ll
+      - run: python -m bandit -r src -ll
       - run: python -m pip_audit -r requirements.txt

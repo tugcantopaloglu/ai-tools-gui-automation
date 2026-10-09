@@ -14,7 +14,8 @@ from selenium.webdriver.chrome.options import Options
 import logging
 import time
 import os
-from file_manager import FileManager
+import tempfile
+from file_manager import FileManager, validate_artifact_filename
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -243,6 +244,22 @@ class BaseAIProvider(ABC):
     def begin_download(self):
         manager = FileManager(self.download_dir, self.download_dir)
         self._download_baseline = manager.snapshot_downloads()
+
+    def save_text_artifact(self, artifact_name: str, extension: str, content: str) -> str:
+        validate_artifact_filename(artifact_name, extension)
+        with tempfile.NamedTemporaryFile(
+                mode='w', encoding='utf-8', prefix=f'{artifact_name}_',
+                suffix=f'.{extension}', dir=self.download_dir, delete=False) as output:
+            output.write(content)
+            return output.name
+
+    def save_error_screenshot(self) -> str:
+        screenshot = self.driver.get_screenshot_as_png()
+        with tempfile.NamedTemporaryFile(
+                mode='wb', prefix='error_screenshot_', suffix='.png',
+                dir=self.download_dir, delete=False) as output:
+            output.write(screenshot)
+            return output.name
 
     def clear_downloads(self):
         """Clear the download directory"""

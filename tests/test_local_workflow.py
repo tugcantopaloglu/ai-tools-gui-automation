@@ -4,12 +4,15 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 
 from base_provider import BaseAIProvider
+from chatgpt_provider import ChatGPTProvider
+from claude_provider import ClaudeProvider
 from file_manager import FileManager
+from gemini_provider import GeminiProvider
 from main import AIAutomationOrchestrator, main
 from markdown_parser import Artifact, MarkdownParser
 
@@ -136,6 +139,72 @@ class LocalWorkflowTests(unittest.TestCase):
         self.assertNotIn('--no-sandbox', options.arguments)
         self.assertNotIn('--remote-debugging-port=9222', options.arguments)
         self.assertTrue(options.experimental_options['prefs']['safebrowsing.enabled'])
+
+    def test_actual_text_providers_preserve_colliding_downloads(self):
+        for provider_type in (GeminiProvider, ChatGPTProvider, ClaudeProvider):
+            for mode, content, extension in [('text', 'Generated fixture', 'txt'),
+                                              ('code', '```python\ndef fixture(): pass\n```', 'py')]:
+                with self.subTest(provider=provider_type.__name__, mode=mode):
+                    directory = self.root / provider_type.__name__ / mode
+                    provider = provider_type(str(directory))
+                    provider.current_mode = mode
+                    provider.driver = Mock()
+                    provider.driver.find_elements.return_value = [Mock(text=content)]
+                    expected_ext = extension if provider_type is ClaudeProvider else 'txt'
+                    original = directory / f'preserved.{expected_ext}'
+                    original.write_bytes(b'original user bytes')
+                    provider.begin_download()
+                    with patch('base_provider.time.sleep'), contextlib.redirect_stdout(io.StringIO()):
+                        first = Path(provider.download_artifact('preserved'))
+                        second = Path(provider.download_artifact('preserved'))
+                    self.assertNotEqual(first, original)
+                    self.assertNotEqual(first, second)
+                    self.assertEqual(original.read_bytes(), b'original user bytes')
+                    self.assertEqual(first.read_text(encoding='utf-8'), content)
+                    self.assertEqual(second.read_text(encoding='utf-8'), content)
+
+    def test_actual_provider_errors_keep_existing_screenshots(self):
+        for provider_type in (GeminiProvider, ChatGPTProvider, ClaudeProvider):
+            with self.subTest(provider=provider_type.__name__):
+                directory = self.root / provider_type.__name__
+                provider = provider_type(str(directory))
+                provider.current_mode = 'text'
+                provider.driver = Mock()
+                provider.driver.find_elements.return_value = []
+                provider.driver.find_element.side_effect = RuntimeError('fixture missing')
+                provider.driver.get_screenshot_as_png.return_value = b'new screenshot'
+                original = directory / 'error_screenshot.png'
+                original.write_bytes(b'original screenshot')
+                with patch('base_provider.time.sleep'), contextlib.redirect_stdout(io.StringIO()):
+                    for _ in range(2):
+                        with self.assertRaisesRegex(Exception, 'Could not extract generated content'):
+                            provider.download_artifact('fixture')
+                self.assertEqual(original.read_bytes(), b'original screenshot')
+                created = list(directory.glob('error_screenshot_*.png'))
+                self.assertEqual(len(created), 2)
+                self.assertTrue(all(path.read_bytes() == b'new screenshot' for path in created))
+
+    def test_chatgpt_fallback_passes_apostrophes_as_script_arguments(self):
+        provider = ChatGPTProvider(self.manager.download_dir)
+        provider.current_mode = 'image'
+        image = Mock()
+        image.size = {'width': 256, 'height': 256}
+        image.find_element.side_effect = RuntimeError('no download button')
+        image.get_attribute.return_value = "blob:fixture'image"
+        provider.driver = Mock()
+        provider.driver.find_elements.return_value = [image]
+        name = "author's;fixture"
+        Artifact('Fixture', 'image', 'chatgpt', name, 'png', 'Local fixture')
+        with patch('base_provider.time.sleep'), patch.object(
+                provider, 'get_latest_download', return_value='fixture.png'):
+            self.assertEqual(provider.download_artifact(name), 'fixture.png')
+        calls = [call for call in provider.driver.execute_script.call_args_list if 'fetch(source)' in call.args[0]]
+        self.assertEqual(len(calls), 1)
+        script, source, filename = calls[0].args
+        self.assertEqual(source, "blob:fixture'image")
+        self.assertEqual(filename, name + '.png')
+        self.assertNotIn(name, script)
+        self.assertNotIn(source, script)
 
 
 if __name__ == '__main__':

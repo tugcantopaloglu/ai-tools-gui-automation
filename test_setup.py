@@ -58,7 +58,7 @@ def test_chrome():
     except Exception as e:
         print(f"  ✗ Chrome/ChromeDriver issue: {e}")
         print("    Install Chrome: https://www.google.com/chrome/")
-        print("    ChromeDriver should auto-install with webdriver-manager")
+        print("    ChromeDriver is managed by Selenium Manager")
         return False
 
 def test_directories():
