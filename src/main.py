@@ -178,8 +178,7 @@ class AIAutomationOrchestrator:
             # Get the appropriate provider
             provider = self.get_provider(artifact.provider)
 
-            # Clear download directory
-            self.file_manager.clear_download_directory()
+            provider.begin_download()
 
             # Select mode
             provider.select_mode(artifact.artifact_type)
@@ -386,9 +385,11 @@ def main():
         return
 
     # Run orchestration
-    orchestrator.initialize_providers()
-    orchestrator.process_artifacts(artifacts, skip_existing=not args.no_skip_existing)
-    orchestrator.cleanup()
+    try:
+        orchestrator.initialize_providers()
+        orchestrator.process_artifacts(artifacts, skip_existing=not args.no_skip_existing)
+    finally:
+        orchestrator.cleanup()
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from selenium.webdriver.chrome.options import Options
 import logging
 import time
 import os
+from file_manager import FileManager
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,6 +35,7 @@ class BaseAIProvider(ABC):
         self.headless = headless
         self.driver = None
         self.wait = None
+        self._download_baseline = {}
 
         # Ensure download directory exists
         os.makedirs(self.download_dir, exist_ok=True)
@@ -54,7 +56,6 @@ class BaseAIProvider(ABC):
                 chrome_options.add_argument(f"--profile-directory={profile_directory}")
 
             # Additional arguments to prevent conflicts
-            chrome_options.add_argument("--remote-debugging-port=9222")
             chrome_options.add_argument("--disable-dev-shm-usage")
 
             # Don't restore previous session - start fresh
@@ -66,7 +67,7 @@ class BaseAIProvider(ABC):
             "download.default_directory": self.download_dir,
             "download.prompt_for_download": False,
             "download.directory_upgrade": True,
-            "safebrowsing.enabled": False
+            "safebrowsing.enabled": True
         }
         chrome_options.add_experimental_option("prefs", prefs)
 
@@ -76,7 +77,6 @@ class BaseAIProvider(ABC):
             chrome_options.add_argument("--disable-gpu")
 
         # Additional options for stability
-        chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--window-size=1920,1080")
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
@@ -234,31 +234,15 @@ class BaseAIProvider(ABC):
         Returns:
             Path to the latest downloaded file
         """
-        start_time = time.time()
-
-        while time.time() - start_time < timeout:
-            try:
-                files = [
-                    os.path.join(self.download_dir, f)
-                    for f in os.listdir(self.download_dir)
-                    if not f.endswith('.crdownload') and not f.endswith('.tmp')
-                ]
-
-                if extension:
-                    files = [f for f in files if f.endswith(f'.{extension}')]
-
-                if files:
-                    latest_file = max(files, key=os.path.getctime)
-                    # Wait a bit to ensure download is complete
-                    time.sleep(2)
-                    return latest_file
-
-            except Exception as e:
-                logger.warning(f"Error checking downloads: {e}")
-
-            time.sleep(1)
-
+        manager = FileManager(self.download_dir, self.download_dir)
+        downloaded = manager.wait_for_download(extension, timeout, self._download_baseline)
+        if downloaded:
+            return downloaded
         raise TimeoutError(f"No download found after {timeout} seconds")
+
+    def begin_download(self):
+        manager = FileManager(self.download_dir, self.download_dir)
+        self._download_baseline = manager.snapshot_downloads()
 
     def clear_downloads(self):
         """Clear the download directory"""

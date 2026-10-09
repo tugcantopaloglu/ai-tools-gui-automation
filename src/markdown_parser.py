@@ -8,6 +8,7 @@ import re
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 import logging
+from file_manager import validate_artifact_filename
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +23,15 @@ class Artifact:
     output_name: str
     extension: str
     prompt: str
+
+    def __post_init__(self):
+        validate_artifact_filename(self.output_name, self.extension)
+        if self.artifact_type not in {'image', 'text', 'code', 'other'}:
+            raise ValueError(f"Unsupported artifact type: {self.artifact_type}")
+        if self.provider not in {'gemini', 'chatgpt', 'claude'}:
+            raise ValueError(f"Unsupported provider: {self.provider}")
+        if not self.prompt.strip():
+            raise ValueError(f"Missing prompt for artifact: {self.name}")
 
     def __repr__(self):
         return f"Artifact(name={self.name}, type={self.artifact_type}, provider={self.provider}, output={self.output_name}.{self.extension})"
@@ -49,15 +59,7 @@ class MarkdownParser:
             with open(self.file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
 
-            # First try structured format
-            structured_artifacts = self._parse_structured_format(content)
-            if structured_artifacts:
-                self.artifacts.extend(structured_artifacts)
-
-            # Then try simple format (for backward compatibility with existing files)
-            simple_artifacts = self._parse_simple_format(content)
-            if simple_artifacts:
-                self.artifacts.extend(simple_artifacts)
+            self.artifacts = self._parse_sections(content)
 
             logger.info(f"Parsed {len(self.artifacts)} artifacts from {self.file_path}")
             return self.artifacts
@@ -66,92 +68,64 @@ class MarkdownParser:
             logger.error(f"Error parsing markdown file: {e}")
             raise
 
-    def _parse_structured_format(self, content: str) -> List[Artifact]:
-        """Parse structured format with metadata"""
+    def _parse_sections(self, content: str) -> List[Artifact]:
+        sections = []
+        name = None
+        body = []
+        fence = None
+        for line in content.splitlines():
+            fence_match = re.match(r'^\s*(`{3,}|~{3,})', line)
+            heading = re.match(r'^(#{1,3})\s+(.+?)\s*$', line) if fence is None else None
+            if heading or (fence is None and line.strip() == '---'):
+                if name is not None:
+                    sections.append((name, body))
+                name = heading.group(2) if heading and heading.group(1) == '###' else None
+                body = []
+            elif name is not None:
+                body.append(line)
+            if fence_match:
+                marker = fence_match.group(1)
+                if fence is None:
+                    fence = marker
+                elif marker[0] == fence[0] and len(marker) >= len(fence):
+                    fence = None
+        if name is not None:
+            sections.append((name, body))
+
         artifacts = []
-
-        # Pattern to match artifact definitions with metadata
-        # ### [Name]
-        # **Type:** [type]
-        # **Provider:** [provider]
-        # **Output Name:** [output_name]
-        # **Extension:** [extension]
-        #
-        # ```
-        # [prompt]
-        # ```
-
-        pattern = re.compile(
-            r'###\s+(.+?)\n'  # Artifact name
-            r'\*\*Type:\*\*\s+(\w+)\n'  # Type
-            r'\*\*Provider:\*\*\s+(\w+)\n'  # Provider
-            r'\*\*Output Name:\*\*\s+(.+?)\n'  # Output name
-            r'\*\*Extension:\*\*\s+(\w+)\n'  # Extension
-            r'.*?```\n'  # Start of code block
-            r'(.*?)'  # Prompt content
-            r'\n```',  # End of code block
-            re.DOTALL | re.MULTILINE
-        )
-
-        matches = pattern.findall(content)
-
-        for match in matches:
-            name, artifact_type, provider, output_name, extension, prompt = match
-
-            artifact = Artifact(
-                name=name.strip(),
-                artifact_type=artifact_type.strip().lower(),
-                provider=provider.strip().lower(),
-                output_name=output_name.strip(),
-                extension=extension.strip().lower(),
-                prompt=prompt.strip()
-            )
-            artifacts.append(artifact)
-            logger.debug(f"Found structured artifact: {artifact.name}")
-
-        return artifacts
-
-    def _parse_simple_format(self, content: str) -> List[Artifact]:
-        """
-        Parse simple format (backward compatible with existing files)
-        Assumes: ### [Name] followed by ``` prompt ```
-        Defaults to: type=image, provider=gemini, extension=png
-        """
-        artifacts = []
-
-        # Pattern to match simple format: ### Name followed by code block
-        pattern = re.compile(
-            r'###\s+(.+?)\n'  # Artifact name
-            r'```\n'  # Start of code block
-            r'(.*?)'  # Prompt content
-            r'\n```',  # End of code block
-            re.DOTALL | re.MULTILINE
-        )
-
-        matches = pattern.findall(content)
-
-        for match in matches:
-            name, prompt = match
-
-            # Skip if this was already parsed as structured format
-            if any(a.name == name.strip() for a in artifacts):
+        for name, lines in sections:
+            metadata = {}
+            while lines:
+                if not lines[0].strip():
+                    lines.pop(0)
+                    continue
+                match = re.fullmatch(
+                    r'\*\*(Type|Provider|Output Name|Extension):\*\*\s*(.+)',
+                    lines[0].strip(), re.IGNORECASE)
+                if match is None:
+                    break
+                metadata[match.group(1).lower()] = match.group(2).strip()
+                lines.pop(0)
+            if not lines:
                 continue
-
-            # Generate output name from artifact name (lowercase, replace spaces with underscores)
+            opening = re.match(r'^\s*(`{3,}|~{3,})', lines[0])
+            if opening:
+                marker = opening.group(1)
+                prompt_lines = []
+                for line in lines[1:]:
+                    if re.fullmatch(r'\s*' + re.escape(marker[0]) + '{' + str(len(marker)) + r',}\s*', line):
+                        break
+                    prompt_lines.append(line)
+                lines = prompt_lines
+            artifact_type = metadata.get('type', 'image').lower()
             output_name = re.sub(r'[^\w\s-]', '', name.strip().lower())
             output_name = re.sub(r'[\s-]+', '_', output_name)
-
-            artifact = Artifact(
-                name=name.strip(),
-                artifact_type='image',  # Default
-                provider='gemini',  # Default
-                output_name=output_name,
-                extension='png',  # Default
-                prompt=prompt.strip()
-            )
-            artifacts.append(artifact)
-            logger.debug(f"Found simple format artifact: {artifact.name}")
-
+            artifacts.append(Artifact(
+                name=name.strip(), artifact_type=artifact_type,
+                provider=metadata.get('provider', 'gemini').lower(),
+                output_name=metadata.get('output name', output_name),
+                extension=metadata.get('extension', 'png' if artifact_type == 'image' else 'txt').lower(),
+                prompt='\n'.join(lines).strip()))
         return artifacts
 
     def filter_by_type(self, artifact_type: str) -> List[Artifact]:

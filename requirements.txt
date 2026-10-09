@@ -11,5 +11,5 @@ pathlib2==2.3.7
 python-dotenv==1.0.0
 
 # Utilities
-tqdm==4.66.1
+tqdm==4.66.3
 colorama==0.4.6

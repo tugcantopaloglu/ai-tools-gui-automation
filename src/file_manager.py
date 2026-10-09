@@ -8,11 +8,25 @@ import os
 import shutil
 import time
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def validate_artifact_filename(artifact_name: str, extension: str):
+    if (not artifact_name or artifact_name in {'.', '..'}
+            or re.search(r'[<>:"/\\|?*\x00-\x1f]', artifact_name)
+            or artifact_name.endswith((' ', '.'))):
+        raise ValueError("Output Name must be a plain filename without path separators")
+    reserved = {'CON', 'PRN', 'AUX', 'NUL'}
+    reserved.update(f'{prefix}{number}' for prefix in ('COM', 'LPT') for number in range(1, 10))
+    if artifact_name.split('.')[0].upper() in reserved:
+        raise ValueError("Output Name must not be a reserved device name")
+    if not re.fullmatch(r'[A-Za-z0-9]+', extension):
+        raise ValueError("Extension must contain only letters and digits, without a dot")
 
 
 class FileManager:
@@ -36,7 +50,14 @@ class FileManager:
         logger.info(f"Download directory: {self.download_dir}")
         logger.info(f"Artifacts directory: {self.artifacts_dir}")
 
-    def wait_for_download(self, extension: Optional[str] = None, timeout: int = 60) -> Optional[str]:
+    def snapshot_downloads(self) -> dict:
+        return {
+            str(path): (path.stat().st_mtime_ns, path.stat().st_size)
+            for path in Path(self.download_dir).iterdir() if path.is_file()
+        }
+
+    def wait_for_download(self, extension: Optional[str] = None, timeout: int = 60,
+                          existing_files: Optional[dict] = None) -> Optional[str]:
         """
         Wait for a file to be downloaded
 
@@ -69,7 +90,13 @@ class FileManager:
 
                 # Filter by extension if provided
                 if extension:
-                    files = [f for f in files if f.endswith(f'.{extension}')]
+                    files = [f for f in files if f.lower().endswith(f'.{extension.lower()}')]
+
+                if existing_files is not None:
+                    files = [f for f in files if existing_files.get(
+                        os.path.join(self.download_dir, f)) != (
+                            os.stat(os.path.join(self.download_dir, f)).st_mtime_ns,
+                            os.path.getsize(os.path.join(self.download_dir, f)))]
 
                 if files:
                     # Get the most recently created file
@@ -117,7 +144,7 @@ class FileManager:
 
         # Create the destination path
         dest_filename = f"{artifact_name}.{extension}"
-        dest_path = os.path.join(self.artifacts_dir, dest_filename)
+        dest_path = self.get_artifact_path(artifact_name, extension)
 
         # If file already exists, create a unique name
         if os.path.exists(dest_path):
@@ -125,7 +152,7 @@ class FileManager:
             counter = 1
             while os.path.exists(dest_path):
                 dest_filename = f"{base_name}_{counter}.{extension}"
-                dest_path = os.path.join(self.artifacts_dir, dest_filename)
+                dest_path = self.get_artifact_path(f"{base_name}_{counter}", extension)
                 counter += 1
             logger.info(f"File already exists, using: {dest_filename}")
 
@@ -180,7 +207,12 @@ class FileManager:
         Returns:
             Full path to the artifact
         """
-        return os.path.join(self.artifacts_dir, f"{artifact_name}.{extension}")
+        validate_artifact_filename(artifact_name, extension)
+        root = Path(self.artifacts_dir).resolve()
+        path = root / f"{artifact_name}.{extension}"
+        if path.resolve().parent != root:
+            raise ValueError("Artifact path must stay inside the artifacts directory")
+        return str(path)
 
     def artifact_exists(self, artifact_name: str, extension: str) -> bool:
         """

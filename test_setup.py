@@ -48,7 +48,6 @@ def test_chrome():
 
         options = Options()
         options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
 
         driver = webdriver.Chrome(options=options)
@@ -66,7 +65,7 @@ def test_directories():
     """Check directory structure"""
     print("\nChecking directories...")
 
-    dirs = ['src', 'bulk_data']
+    dirs = ['src']
     files = ['config.json', 'TEMPLATE.md']
 
     all_ok = True
@@ -163,7 +162,7 @@ def main():
     if all(results):
         print("\n✓ All tests passed! You're ready to use the tool.")
         print("\nNext steps:")
-        print("1. Run: python src/main.py bulk_data/GEMINI_ASSET_PROMPTS.md")
+        print("1. Create prompts.md using TEMPLATE.md, then run: python src/main.py prompts.md")
         print("2. Log in to Gemini when prompted")
         print("3. Watch the automation work!")
     else:

@@ -1,4 +1,6 @@
 #!/bin/bash
+set -e
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 
 echo "============================================================"
 echo "AI Tools GUI Automation - Quick Start"
@@ -17,7 +19,7 @@ python3 --version
 
 echo ""
 echo "[2/4] Installing dependencies..."
-pip3 install -r requirements.txt
+python3 -m pip install -r requirements.txt
 
 echo ""
 echo "[3/4] Running setup tests..."
@@ -30,11 +32,11 @@ echo "============================================================"
 echo "Next Steps:"
 echo "============================================================"
 echo "1. Run the automation:"
-echo "   python3 src/main.py bulk_data/GEMINI_ASSET_PROMPTS.md"
+echo "   Create prompts.md using TEMPLATE.md, then run python3 src/main.py prompts.md"
 echo ""
 echo "2. Log in to Gemini when the browser opens"
 echo ""
 echo "3. Watch the automation work!"
 echo ""
-echo "For help, see SETUP.md or example_usage.md"
+echo "For help, see README.md or SETUP.md"
 echo "============================================================"
